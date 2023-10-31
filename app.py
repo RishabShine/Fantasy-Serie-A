@@ -4,18 +4,21 @@ from flask import Flask, flash, redirect, render_template, request, session, jso
 from flask_session import Session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from extras import login_required
+from extras import login_required, apology
 
 # Configure application
+
 app = Flask(__name__)
 
+# setting up data base
+
+db = 
 
 # Registration, logging in and logging out
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """Log user in"""
-
+    
     # Forget any user_id
     session.clear()
 
