@@ -93,12 +93,13 @@ def register():
 
     else:
         return render_template("register.html")
-
+    
         
 # functions
 
 # points system
 
+# points system
 
 # home screen
 
@@ -107,7 +108,7 @@ def index():
     
     players = db.execute("SELECT players.name, players.position, player.value, team.crest, team.color FROM players JOIN teams ON teams.id = players.team_id WHERE player.id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = NULL", session["user_id"])
 
-    return render_template("index.html")
+    return render_template("index")
 
 # LEAGUE
 
