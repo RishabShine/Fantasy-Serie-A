@@ -99,7 +99,6 @@ def register():
 
 # points system
 
-# points system
 
 # home screen
 
@@ -128,7 +127,7 @@ def league():
 
 # ** if already in league this will redirect to league homescreen
 
-@app.route("/createleague", methods=["GET", "POST"]:
+@app.route("/createleague", methods=["GET", "POST"])
 def create_league():
     if request.method == "POST":
 
