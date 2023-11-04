@@ -93,11 +93,17 @@ def register():
 
     else:
         return render_template("register.html")
+<<<<<<< HEAD
     
         
 # functions
 
 # points system
+=======
+
+     
+# functions
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
 
 # points system
 
@@ -110,8 +116,11 @@ def index():
 
     return render_template("index")
 
+<<<<<<< HEAD
 # LEAGUE
 
+=======
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
 # league home screen
 
 # ! condition for leaving league (if league_id != NULL cannot join other league, method of removing data when leaving league)
@@ -122,15 +131,20 @@ def league():
     cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
     players = db.execute("SELECT players.name, players.position, player.value, team.crest, team.color FROM players JOIN teams ON teams.id = players.team_id WHERE player.id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id IN (SELECT id FROM league WHERE id IN (SELECT league_id FROM users WHERE id = ?))", session["user_id"], session["user_id"])
 
+<<<<<<< HEAD
     # ! add function to leave league
 
 # creating league
 
 # ** if already in league this will redirect to league homescreen
+=======
+# create league
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
 
 @app.route("/createleague", methods=["GET", "POST"])
 def create_league():
     if request.method == "POST":
+<<<<<<< HEAD
 
         # getting league information
         # ! getting information
@@ -181,11 +195,25 @@ def join_league():
 # TRADING (sending offers, and accepting trades)
 
 # sending offer 
+=======
+        return render_template("league.html")
+    else:
+        return render_template("createleague.html")
+
+
+# drafting
+
+# trading (sending offers, and accepting trades)
+
+# sending offer 
+# ! *** (how to set up league_id??)
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
 
 @app.route("/offer", methods=["GET", "POST"])
 def offer():
     if request.method == "POST":
 
+<<<<<<< HEAD
         # ! scan document for offer details ...
         # getting offer details
 
@@ -196,6 +224,9 @@ def offer():
         # add offer to offers table
 
         db.execute("INSERT INTO offers (sender, receiver, player_s, player_r) VALUES (?, ?, ?)", session["user_id"], receiver, player_s, player_r)
+=======
+        # ! add offer to offers table
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
 
         return redirect("/")
 
@@ -251,10 +282,13 @@ def trade():
         db.execute("DELETE FROM ownership WHERE user_id = ? AND player_id = ? AND league_id = ?", offer["receiver"], offer["player_r"], offer["league_id"])
         db.execute("DELETE FROM offers WHERE sender = ? AND receiver = ? AND player_s = ? AND player_r = ? AND league_id = ?", offer["sender"], offer["receiver"], offer["player_s"], offer["player_r"], offer["league_id"])
 
+<<<<<<< HEAD
         # removing offers for the player that has just changed ownership
 
         db.execute("DELETE FROM offers WHERE player_s = ? OR player_s = ? OR player_r = ? OR player_r = ?", offer["player_s"], offer["player_r"], offer["player_s"], offer["player_r"])
 
+=======
+>>>>>>> 879665d4597d326aeedc6a1c5adec86a0c3f251f
         return redirect("/league")
 
     else:
