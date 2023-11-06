@@ -89,7 +89,7 @@ def register():
         session["user_id"] = rows[0]["id"]
 
         # Redirect user to home page
-        return redirect("/quote")
+        return redirect("/")
 
     else:
         return render_template("register.html")
@@ -178,6 +178,83 @@ def join_league():
 
 # DRAFTING
 
+@app.route("/draft", methods=["GET", "POST"])
+def draft():
+    if request.method == "POST":
+        
+        # ! getting information about selected player
+
+        player = request.form.get()
+
+        # checking if user can afford player
+
+        cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
+        league_id = db.execute("SELECT league_id FROM users WHERE id = ?)", session["user_id"])
+
+        if player["value"] > cash:
+            return apology("insufficient funds")
+        else:
+
+            # updating cash, ownership, and calling the next user in queue
+
+            cash -= player["value"]
+            db.execute("UPDATE users SET cash = ? WHERE id = ?", session["user_id"])
+            db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", player["player_id"], session["user_id"], league_id)
+
+            # ! do a check here if everyone has sufficient players, if so delete leagues the draft_queue
+
+            cur_queue = db.execute("SELECT queue FROM draft_queue WHERE status = 'active' AND league_id = ?", league_id)
+            next_queue = cur_queue + 1
+            db.execute("UPDATE drafting_queue SET status = 'waiting' WHERE queue = ? AND league_id = ?", cur_queue, league_id)
+            db.execute("UPDATE drafting_queue SET status = 'active' WHERE queue = ? AND league_id = ?", next_queue, league_id)
+
+            # ! success.html page here
+            return redirect("/")
+
+    else:
+
+        # checking if draft choice is currently available
+        # ! this does not consider league_id (assumes one league per user)
+        status = db.execute("SELECT status FROM drafting_queue WHERE user_id = ?", session["user_id"])
+
+        if status == "active":
+
+            # getting cash and players that are available for user
+
+            league_id = db.execute("SELECT league_id FROM users WHERE id = ?)", session["user_id"])
+            players = db.execute("SELECT player_id, name, value FROM players WHERE player_id NOT IN (SELECT player_id FROM ownership WHERE laegue_id = ?)", league_id)
+            cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
+            return render_template("draft.html", cash=cash, players=players)
+        else:
+            return apology("draft choice not currently available")
+
+# starting draft
+
+@app.route("/startdraft", methods=["GET", "POST"])
+def start_draft():
+    if request.method == "POST":
+
+        # starting draft
+
+        league_id = db.execute("SELECT league_id FROM users WHERE id = ?)", session["user_id"])
+        db.execute("UPDATE drafting_queue SET status = 'active' WHERE league_id = ? AND queue = 1", league_id)
+        # ! create "success" template
+        return redirect("/draft")
+    else:
+
+        # checking if admin is accessing link and draft has not been completed
+        
+        league_id = db.execute("SELECT league_id FROM users WHERE id = ?)", session["user_id"])
+        admin = db.execute("SELECT admin FROM league WHERE id = ?)", league_id)
+        draft_check = db.execute("SELECT * FROM drafting_queue WHERE league_id = ?", league_id)
+        start_check = db.exceute("SELECT * FROM drafting_queue WHERE league_id = ? AND status = 'active'")
+
+        if len(draft_check) > 0 and admin == session["user_id"] and len(start_check) != 0:
+            return render_template("startdraft.html")
+        else:
+            return apology("drafting unavailable")
+
+
 # TRADING (sending offers, and accepting trades)
 
 # sending offer 
@@ -207,7 +284,7 @@ def offer():
 
         # checking what players the user is able to trade (not currently in an offer)
 
-        available_players = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ? AND player_id NOT IN offers WHERE league_id IN (SELECT player_s FROM offers WHERE sender = ? AND league_id ))", session["user_id"], league_id, session["user_id"], league_id)
+        available_players = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ? AND player_id NOT IN offers WHERE league_id IN (SELECT player_s FROM offers WHERE sender = ? AND league_id = ?))", session["user_id"], league_id, session["user_id"], league_id)
         
         # checking how much extra space the user has in their team
 
