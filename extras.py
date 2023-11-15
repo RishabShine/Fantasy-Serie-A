@@ -18,3 +18,6 @@ def login_required(f):
 def apology(message):
     return render_template("apology.html", message=message)
 
+def success(message):
+    return render_template("success.html", message=message)
+
