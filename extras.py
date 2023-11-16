@@ -1,6 +1,9 @@
 
 from flask import redirect, render_template, session
+import os
 from functools import wraps
+Fantasy_Token = os.environ["Fantasy_Token"]
+
 
 def login_required(f):
     """
