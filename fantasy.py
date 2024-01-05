@@ -104,6 +104,7 @@ def register():
 # home screen
 
 @app.route("/", methods=["GET"])
+@login_required
 def index():
     
     players = db.execute("SELECT players.name, players.position, player.value, team.crest, team.color FROM players JOIN teams ON teams.id = players.team_id WHERE player.id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = NULL", session["user_id"])
@@ -115,6 +116,7 @@ def index():
 # league home screen
 
 @app.route("/league", methods=["GET"])
+@login_required
 def league():
     
     cash = db.execute("SELECT cash FROM users WHERE id = ?", session["user_id"])[0]["cash"]
@@ -129,24 +131,26 @@ def league():
 # ** if already in league this will redirect to league homescreen
 
 @app.route("/createleague", methods=["GET", "POST"])
+@login_required
 def create_league():
     if request.method == "POST":
 
         # getting league information
         # ! getting information
-        admin = request.form.get()
-        name = request.form.get()
+        name = request.form.get("name")
+        name = name.lower
 
         # adding league to league table
 
         db.execute("INSERT INTO league (admin, name) VALUES (?, ?)", session["user_id"], name)
-
+        # TODO create success template
         return success("league joined")
     else:
 
         # checking if user is already in league
 
         league_check = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
+        # ! check return value if it is NULL??
         if not league_check == "NULL":
             return apology("you are already in a league") 
         else:
@@ -155,12 +159,13 @@ def create_league():
 # joining league
 
 @app.route("/joinleague", methods=["GET", "POST"])
+@login_required
 def join_league():
     if request.method == "POST":
         
         # getting information league that is being requested
         # ! getting information
-        league = request.form.get()
+        league = request.form.get("league")
 
         # adding user to league requests table
         db.execute("INSERT INTO league_requests (user_id, league_id)", session["user_id"], league)
@@ -174,17 +179,21 @@ def join_league():
         if not league_check == "NULL":
             return apology("you are already in a league")
         else:
-            return render_template("join_league.html")
+            # TODO: enter all available leagues as options
+            leagues = db.execute("SELECT id, name FROM league")
+            return render_template("join_league.html", leagues=leagues)
 
 # DRAFTING
 
 @app.route("/draft", methods=["GET", "POST"])
+@login_required
 def draft():
     if request.method == "POST":
         
         # ! getting information about selected player
 
-        player = request.form.get()
+        player = request.form.get("player")
+        player = db.execute("SELECT player_id, name, position, value FROM players WHERE player_id = ?", player)
 
         # checking if user can afford player
 
@@ -201,12 +210,28 @@ def draft():
             db.execute("UPDATE users SET cash = ? WHERE id = ?", session["user_id"])
             db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", player["player_id"], session["user_id"], league_id)
 
-            # ! do a check here if everyone has sufficient players, if so delete leagues the draft_queue
+            # checking if the draft is complete (all players have sufficient players)
+            draftCheck = db.execute("SELECT * FROM ownership WHERE league_id = ?", league_id)
+            membersCount = len(db.execute("SELECT * FROM users WHERE league_id = ?", league_id))
 
-            cur_queue = db.execute("SELECT queue FROM draft_queue WHERE status = 'active' AND league_id = ?", league_id)
-            next_queue = cur_queue + 1
-            db.execute("UPDATE drafting_queue SET status = 'waiting' WHERE queue = ? AND league_id = ?", cur_queue, league_id)
-            db.execute("UPDATE drafting_queue SET status = 'active' WHERE queue = ? AND league_id = ?", next_queue, league_id)
+            if draft_check == membersCount * 15:
+
+                # draft is complete
+
+                # deleting this league from the drafting queue
+
+                db.execute("DELETE FROM drafting_queue WHERE league_id = ?", league_id)
+
+                # TODO possibly add some form of 'drafting complete' message
+
+            else:
+
+                # setting the turn to the next user in queue
+
+                cur_queue = db.execute("SELECT queue FROM draft_queue WHERE status = 'active' AND league_id = ?", league_id)
+                next_queue = cur_queue + 1
+                db.execute("UPDATE drafting_queue SET status = 'waiting' WHERE queue = ? AND league_id = ?", cur_queue, league_id)
+                db.execute("UPDATE drafting_queue SET status = 'active' WHERE queue = ? AND league_id = ?", next_queue, league_id)
 
             return success("draft pick completed")
 
@@ -242,7 +267,7 @@ def draft():
 
             # getting cash and players that are available for user
 
-            total_players = db.execute("SELECT player_id, name, value, position FROM players WHERE player_id NOT IN (SELECT player_id FROM ownership WHERE laegue_id = ?)", league_id)
+            total_players = db.execute("SELECT player_id, name, position FROM players WHERE player_id NOT IN (SELECT player_id FROM ownership WHERE laegue_id = ?)", league_id)
             players = []
             for player in total_players:
                 if player["position"] in positions:
@@ -257,6 +282,7 @@ def draft():
 # starting draft
 
 @app.route("/startdraft", methods=["GET", "POST"])
+@login_required
 def start_draft():
     if request.method == "POST":
 
@@ -274,7 +300,7 @@ def start_draft():
         admin = db.execute("SELECT admin FROM league WHERE id = ?)", league_id)
         draft_check = db.execute("SELECT * FROM drafting_queue WHERE league_id = ?", league_id)
         start_check = db.exceute("SELECT * FROM drafting_queue WHERE league_id = ? AND status = 'active'")
-
+        # ! this may be NULL
         if len(draft_check) > 0 and admin == session["user_id"] and len(start_check) != 0:
             return render_template("startdraft.html")
         else:
@@ -283,9 +309,59 @@ def start_draft():
 
 # TRADING (sending offers, and accepting trades)
 
+# choosing player to send offer to
+
+@app.route("/startoffer", methods=["GET", "POST"])
+@login_required
+def startoffer():
+    if request.method == "POST":
+
+        # getting selected league member
+
+        reciever = request.form.get("")
+
+        # getting league id from user
+
+        league_id = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
+
+        # checking what players the user is able to trade (not currently in an offer)
+
+        usersPlayers = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ? AND player_id NOT IN (SELECT player_id FROM offers WHERE league_id = ? AND sender = ?)", session["user_id"], league_id, league_id, session["user_id"])
+        
+        # checking how much extra space the user has in their team
+
+        total_players = db.execute("SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?)", session["user_id"], league_id)
+
+        space = 17 - (len(total_players))
+
+        # displaying players who are owned in the league
+
+        if reciever == 'free_agent':
+
+            # if user wants to choose a free agent (cannot get rid of players, users players are not entered)
+
+            available = db.execute("SELECT player_id, name FROM players WHERE player_id NOT IN (SELECT player_id FROM ownership WHERE league_id = ?)", league_id)
+
+            return render_template("offer.html", usersPlayers=None, available=available)
+
+        else:
+
+            # if user wants to trade with another user
+
+            available = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?))", reciever, league_id)
+            
+            return render_template("offer.html", usersPlayers=usersPlayers, available=available)
+    
+    else:
+
+        leagueMembers = db.execute("SELECT id, username FROM users WHERE league_id = ?", league_id)
+
+        return render_template("startoffer.html", members=leagueMembers)
+
 # sending offer 
 
 @app.route("/offer", methods=["GET", "POST"])
+@login_required
 def offer():
     if request.method == "POST":
         
@@ -326,9 +402,9 @@ def offer():
         
         # checking how much extra space the user has in their team
 
-        total_players = db.execute("SELECT player_id FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?)", session["user_id"], league_id)
+        total_players = db.execute("SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?)", session["user_id"], league_id)
 
-        space = 14 - (len(total_players))
+        space = 17 - (len(total_players))
 
         # displaying players who are owned in the league
 
@@ -344,6 +420,7 @@ def offer():
 # accepted trades
 
 @app.route("/trade", methods=["GET", "POST"])
+@login_required
 def trade():    
     if request.method == "POST":
 
