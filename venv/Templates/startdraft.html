@@ -1,0 +1,11 @@
+{% extends "league_layout.html" %}
+
+{% block title %}
+    start draft
+{% endblock %}
+
+{% block main %}
+    <form action="/startdraft" method="post">
+        <button type="submit">Start Draft</button>
+    </form>
+{% endblock %}

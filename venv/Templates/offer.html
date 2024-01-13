@@ -1,0 +1,23 @@
+{% extends "league_layout.html" %}
+
+{% block title %}
+    Offer
+{% endblock %}
+
+{% block main %}
+    <form action="/offer" method="post">
+        <div>
+            <select name="receiver">
+                <option value="receiver">trading with user: # {{ reciever }}</option>
+            </select>
+            {% for player in usersPlayers %}
+                <input type="checkbox" name="sending" value="{{ player.player_id }}">{{ player.name }}</option>
+            {% endfor %}
+            <br>
+            {% for player in available %}
+                <input type="checkbox" name="recieving" value="{{ player.player_id }}">{{ player.name }}</option>
+            {% endfor %}
+        </div>
+        <button type="submit">Send Offer</button>
+    </form>
+{% endblock %}

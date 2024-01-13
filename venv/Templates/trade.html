@@ -1,0 +1,16 @@
+{% extends "league_layout.html" %}
+
+{% block title %}
+    Trade
+{% endblock %}
+
+{% block main %}
+    <form action="/trade" method="post">
+        <div>
+            {% for offer in offers_received %}
+                <input name="offerReceived" value="{{ offer.id }}">{{ offer.player_r }} for {{ offer.player_s }}
+            {% endfor %}
+        </div>
+        <button type="submit">Select</button>
+    </form>
+{% endblock %}

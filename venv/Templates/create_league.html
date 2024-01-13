@@ -1,0 +1,14 @@
+{% extends "league_layout.html" %}
+
+{% block title %}
+    Create League
+{% endblock %}
+
+{% block main %}
+    <form action="/createleague" method="post">
+        <div>
+            <input name="name" autocomplete="off" autofocus name="name" placeholder="Enter name of league" type="text">
+        </div>
+        <button type="submit">Submit</button>
+    </form>
+{% endblock %}

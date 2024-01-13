@@ -214,7 +214,7 @@ def draft():
             draftCheck = db.execute("SELECT * FROM ownership WHERE league_id = ?", league_id)
             membersCount = len(db.execute("SELECT * FROM users WHERE league_id = ?", league_id))
 
-            if draft_check == membersCount * 15:
+            if draftCheck == membersCount * 15:
 
                 # draft is complete
 
@@ -318,7 +318,7 @@ def startoffer():
 
         # getting selected league member
 
-        reciever = request.form.get("")
+        receiver = request.form.get("receiver")
 
         # getting league id from user
 
@@ -327,22 +327,18 @@ def startoffer():
         # checking what players the user is able to trade (not currently in an offer)
 
         usersPlayers = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ? AND player_id NOT IN (SELECT player_id FROM offers WHERE league_id = ? AND sender = ?)", session["user_id"], league_id, league_id, session["user_id"])
-        
-        # checking how much extra space the user has in their team
 
-        total_players = db.execute("SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?)", session["user_id"], league_id)
+        # getting the players available to trade to allow user to make a trade
 
-        space = 17 - (len(total_players))
-
-        # displaying players who are owned in the league
-
-        if reciever == 'free_agent':
+        if receiver == 'free_agent':
 
             # if user wants to choose a free agent (cannot get rid of players, users players are not entered)
 
+            # TODO allow users to simply get rid of players they do not want
+
             available = db.execute("SELECT player_id, name FROM players WHERE player_id NOT IN (SELECT player_id FROM ownership WHERE league_id = ?)", league_id)
 
-            return render_template("offer.html", usersPlayers=None, available=available)
+            return render_template("offer.html", usersPlayers=None, available=available, receiver=receiver)
 
         else:
 
@@ -350,7 +346,7 @@ def startoffer():
 
             available = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?))", reciever, league_id)
             
-            return render_template("offer.html", usersPlayers=usersPlayers, available=available)
+            return render_template("offer.html", usersPlayers=usersPlayers, available=available, reciever=receiver)
     
     else:
 
@@ -360,63 +356,48 @@ def startoffer():
 
 # sending offer 
 
-@app.route("/offer", methods=["GET", "POST"])
+@app.route("/offer", methods=["POST"])
 @login_required
 def offer():
-    if request.method == "POST":
         
-        league_id = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
+    league_id = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
 
-        # ! scan document for offer details ...
-        # getting offer details
+    # getting details about offer and current state of the users account
 
-        receiver = request.form.get()
-        player_s = request.form.get()
-        player_r = request.form.get()
+    totalPlayers = db.execute("SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?", session["user_id"], league_id)
 
-        # checking if user has room in team to make trades
+    # getting offer details
 
-        total_players = len(db.execute("SELECT * FROM ownership WHERE user_id = ? AND league_id = ?", session["user_id"], league_id))
-        space = 15 - total_players
-        # ! check same conditions while accepting trade
-        if player_s == 'NULL' and space == 0:
-            return apology("you have too many players to make this trade")
-        elif player_s != 'NULL' and player_r == 'NULL' and space < 5:
-            return apology("you have too little players to make this trade")
+    receiver = request.form.get("receiver")
+    player_s = request.form.getlist("sending")
+    player_r = request.form.getlist("recieving")
+
+    # checking for sufficient space in users account
+
+    # TODO add a check for recipient as well
+
+    spaceCheck = 17 - len(totalPlayers) - len(player_r) + len(player_s)
+
+    if spaceCheck > 0:
+
+        # if user is choosing a free agent
+        if receiver == 'free_agent':
+
+            for player in player_r:
+                
+                db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", player_r, session["user_id"], league_id)
 
         # add offer to offers table
 
         db.execute("INSERT INTO offers (sender, receiver, player_s, player_r) VALUES (?, ?, ?)", session["user_id"], receiver, player_s, player_r)
-        
-        return success("offer sent")
-
+    
     else:
         
-        # getting league id from user
-
-        league_id = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
-
-        # checking what players the user is able to trade (not currently in an offer)
-
-        available_players = db.execute("SELECT player_id, name FROM players WHERE player_id IN (SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ? AND player_id NOT IN (SELECT player_id FROM offers WHERE league_id = ? AND sender = ?)", session["user_id"], league_id, league_id, session["user_id"])
+        return apology("insufficient space in your account")
         
-        # checking how much extra space the user has in their team
+    return success("offer sent")
 
-        total_players = db.execute("SELECT player_id FROM ownership WHERE user_id = ? AND league_id = ?)", session["user_id"], league_id)
-
-        space = 17 - (len(total_players))
-
-        # displaying players who are owned in the league
-
-        owned = db.execute("SELECT players.player_id, players.name, users.username FROM ownership JOIN users ON ownership.user_id = users.id WHERE users.league_id = ? AND users.id NOT IN (SELECT id FROM users WHERE id = ?)", league_id, session["user_id"])
-
-        # displaying players that are not owned in the laegue
-
-        free_agent = ("SELECT player_id, name FROM players WHERE player_id NOT IN (SELECT players.player_id, players.name, users.username FROM ownership JOIN users ON ownership.user_id = users.id WHERE users.league_id = ? AND users.id NOT IN (SELECT id FROM users WHERE id = ?)))", league_id, session["user_id"])
-
-        # ! ensure that when making an offer there are not extra players, and a balance of positions (one trade at a time?)
-        return render_template("offer.html", space=space, available_players=available_players, owned=owned, free_agent=free_agent)
-
+   
 # accepted trades
 
 @app.route("/trade", methods=["GET", "POST"])
@@ -424,28 +405,47 @@ def offer():
 def trade():    
     if request.method == "POST":
 
-        # gettting information about accepted offer
-        # ! create a condition so that if a user accepts a trade for a player which someone else sent an offer for, the offer is removed (check should be run after any accepted trade)
-        # ! how to connect based on league
+        # getting league id
 
-        offer = db.execute("SELECT sender, receiver, player_s, player_r FROM offers WHERE reciever = ? OR sender = ")
+        league_id = db.execute("SELECT league_id FROM users WHERE id = ?", session["user_id"])
 
-        # sending players to new owners
-        
-        if not offer["player_s"] == "NULL":
-            db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", offer["player_s"], offer["receiver"], offer["league_id"])
-        if not offer["player_r"] == "NULL":
-            db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", offer["player_r"], offer["sender"], offer["league_id"])
+        # gettting offer id for accepted offer
 
-        # removing traded players from previous owners ownership and removing the offer
+        offerAccepted = request.form.get("offersReceived")
 
-        db.execute("DELETE FROM ownership WHERE user_id = ? AND player_id = ? AND league_id = ?", offer["sender"], offer["player_s"], offer["league_id"])
-        db.execute("DELETE FROM ownership WHERE user_id = ? AND player_id = ? AND league_id = ?", offer["receiver"], offer["player_r"], offer["league_id"])
-        db.execute("DELETE FROM offers WHERE sender = ? AND receiver = ? AND player_s = ? AND player_r = ? AND league_id = ?", offer["sender"], offer["receiver"], offer["player_s"], offer["player_r"], offer["league_id"])
+        # getting the other users id
+
+        otherUser = db.execute("SELECT sender FROM offers WHERE id = ?", offerAccepted)
+
+        # getting the players this user will be recieving
+
+        playersReceiving = db.execute("SELECT player_s FROM offers WHERE id = ?", offerAccepted)
+
+        # getting the players this user is sending
+
+        playersSending = db.execute("SELECT player_r FROM offers WHERE id = ?", offerAccepted)
+
+        # updating ownership, transfering players from the accepted trade
+
+        for playerR in playersReceiving:
+            
+            db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", playerR, session["user_id"], league_id)
+            db.execute("DELETE FROM ownership WHERE user_id = ? AND player_id = ? AND league_id = ?", otherUser, playerR, league_id)
+
+
+        for playerS in playersSending:
+            
+            db.execute("INSERT INTO ownership (player_id, user_id, league_id) VALUES (?, ?, ?)", playerS, otherUser, league_id)
+            db.execute("DELETE FROM ownership WHERE user_id = ? AND player_id = ? AND league_id = ?", session["user_id"], playerS, league_id)
+
+
+        # removing offer from offer table
+
+        db.execute("DELETE FROM offers WHERE id = ?", offerAccepted)
 
         # removing offers for the player that has just changed ownership
 
-        db.execute("DELETE FROM offers WHERE player_s = ? OR player_s = ? OR player_r = ? OR player_r = ?", offer["player_s"], offer["player_r"], offer["player_s"], offer["player_r"])
+        db.execute("DELETE FROM offers WHERE player_s IN (?) OR player_s IN (?) OR player_r IN (?) OR player_r IN (?)", playersReceiving, playersSending, playersReceiving, playersSending)
 
         return success("trade completed")
 
@@ -454,6 +454,6 @@ def trade():
         # viewing trade offers
 
         offers_received = db.execute("SELECT * FROM offers WHERE receiver = ?", session["user_id"])
-        offers_sent = db.execute("SELECT * FROM offers WHERE sender = ?", session["user_id"])
+        #offers_sent = db.execute("SELECT * FROM offers WHERE sender = ?", session["user_id"])
 
-        return render_template("trades.html", offers_receiver=offers_received, offers_sent=offers_sent)
+        return render_template("trades.html", offers_received=offers_received)
